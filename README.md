@@ -2,6 +2,21 @@
 
 This system implements an advanced Opening Range Breakout (ORB) trading strategy enhanced with AI-based pattern recognition and decision making. It uses the DeepSeek-Coder model for local inference to provide sophisticated trading analysis without API costs.
 
+## Inspiration and Learning Resources
+
+### YouTube Tutorial Reference
+**Video Source:** [Opening Range Breakout (ORB) Trading Strategy Explained by ScarfaceTrades](https://www.youtube.com/watch?v=7-Wg0dh0myM&t=1813s&ab_channel=ScarfaceTrades)
+
+This project was inspired by and developed alongside the comprehensive YouTube tutorial by ScarfaceTrades. The video provides an in-depth explanation of the Opening Range Breakout (ORB) trading strategy, which served as the foundational framework for this AI-enhanced implementation. 
+
+Key learnings from the video that influenced this project include:
+- Detailed breakdown of the ORB trading methodology
+- Insights into identifying and trading opening range breakouts
+- Practical strategies for entry, stop loss, and target determination
+- Understanding market dynamics during the first hour of trading
+
+While the original video provides a manual approach, this project extends the concept by incorporating AI-driven analysis and decision-making processes.
+
 ## System Architecture
 
 The system consists of six main components:
