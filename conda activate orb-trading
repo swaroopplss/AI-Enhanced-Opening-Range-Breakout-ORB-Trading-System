@@ -1,0 +1,21 @@
+conda activate orb-trading
+
+python main.py --mode train --api-key 31ToiHyQcmF3tx0u9alvjiF5IjTrqSSR --symbol QQQ --start-date 2023-02-01 --end-date 2024-02-29
+
+
+How to Use the System
+
+Training Phase:
+
+python main.py --mode train --api-key 31ToiHyQcmF3tx0u9alvjiF5IjTrqSSR --symbol QQQ --start-date 2023-03-23 --end-date 2025-03-24
+This will create a pattern recognition model based on historical data.
+Backtesting:
+
+python main.py --mode backtest --api-key YOUR_POLYGON_API_KEY --symbol QQQ --use-ai
+This will test the strategy on historical data to evaluate performance.
+Optimization:
+python main.py --mode optimize --api-key YOUR_POLYGON_API_KEY --symbol QQQ --use-ai
+This will find the best strategy parameters.
+Live Trading:
+python main.py --mode live --api-key YOUR_POLYGON_API_KEY --symbol QQQ --use-ai
+This will monitor the market in real-time for ORB setups.
