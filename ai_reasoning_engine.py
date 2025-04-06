@@ -611,6 +611,221 @@ class LocalAIReasoningEngine:
                 return True
         
         return False
+    def _prepare_pattern_analysis(self, pattern_results):
+        """Format pattern recognition results for the model prompt"""
+        if pattern_results is None:
+            return "No pattern recognition results available."
+            
+        summary = []
+        summary.append(f"Pattern Recognition Results:")
+        
+        # Check if pattern_results is a dictionary or an object
+        if isinstance(pattern_results, dict):
+            action = pattern_results.get('recommended_action', 'Unknown')
+            confidence = pattern_results.get('final_confidence', 0.5) * 100
+            summary.append(f"Recommended action: {action}")
+            summary.append(f"Confidence: {confidence:.1f}%")
+            
+            # Add info about similar patterns
+            if 'similar_patterns' in pattern_results and pattern_results['similar_patterns']:
+                similar_patterns = pattern_results['similar_patterns']
+                win_count = sum(1 for p in similar_patterns if p.get('outcome', 0) == 1)
+                summary.append(f"Similar patterns found: {len(similar_patterns)}")
+                summary.append(f"Win rate from similar patterns: {win_count / len(similar_patterns) * 100:.1f}%")
+                
+                # Add details from most similar pattern
+                if similar_patterns:
+                    most_similar = similar_patterns[0]
+                    outcome = "Win" if most_similar.get('outcome', 0) == 1 else "Loss"
+                    summary.append(f"Most similar pattern ({outcome}):")
+                    
+                    for key in ['date', 'direction', 'rsi', 'rel_volume']:
+                        if key in most_similar:
+                            value = most_similar[key]
+                            if key in ['rsi', 'rel_volume']:
+                                summary.append(f"  {key.upper()}: {value:.1f}" + ("x" if key == 'rel_volume' else ""))
+                            else:
+                                summary.append(f"  {key.capitalize()}: {value}")
+        elif hasattr(pattern_results, 'recommended_action') and hasattr(pattern_results, 'final_confidence'):
+            # Handle case where pattern_results is an object
+            action = pattern_results.recommended_action
+            confidence = pattern_results.final_confidence * 100
+            summary.append(f"Recommended action: {action}")
+            summary.append(f"Confidence: {confidence:.1f}%")
+            
+            # Check for similar patterns
+            if hasattr(pattern_results, 'similar_patterns') and pattern_results.similar_patterns:
+                similar_patterns = pattern_results.similar_patterns
+                try:
+                    win_count = sum(1 for p in similar_patterns if getattr(p, 'outcome', 0) == 1)
+                    summary.append(f"Similar patterns found: {len(similar_patterns)}")
+                    summary.append(f"Win rate from similar patterns: {win_count / len(similar_patterns) * 100:.1f}%")
+                    
+                    # Add details from most similar pattern if available
+                    if similar_patterns and hasattr(similar_patterns[0], 'date'):
+                        most_similar = similar_patterns[0]
+                        outcome = "Win" if getattr(most_similar, 'outcome', 0) == 1 else "Loss"
+                        summary.append(f"Most similar pattern ({outcome}):")
+                        summary.append(f"  Date: {getattr(most_similar, 'date', 'Unknown')}")
+                        
+                        if hasattr(most_similar, 'direction'):
+                            summary.append(f"  Direction: {most_similar.direction}")
+                        
+                        if hasattr(most_similar, 'rsi'):
+                            summary.append(f"  RSI: {most_similar.rsi:.1f}")
+                        
+                        if hasattr(most_similar, 'rel_volume'):
+                            summary.append(f"  Relative Volume: {most_similar.rel_volume:.1f}x")
+                except Exception as e:
+                    logger.error(f"Error processing similar patterns: {str(e)}")
+                    summary.append("Error processing similar patterns data")
+        else:
+            summary.append("Pattern results format not recognized")
+        
+        return "\n".join(summary)
+        
+    def _get_level_statistics(self, current_data):
+        """Get statistics about various market levels based on historical data"""
+        summary = []
+        summary.append("Market Level Statistics:")
+        
+        # Determine which levels we're currently close to
+        retest_levels = []
+        
+        # Check Opening Range levels
+        if 'or_high' in current_data and 'dist_from_or_high' in current_data:
+            if abs(current_data['dist_from_or_high']) < 0.3:
+                retest_levels.append('orb_high')
+        
+        if 'or_low' in current_data and 'dist_from_or_low' in current_data:
+            if abs(current_data['dist_from_or_low']) < 0.3:
+                retest_levels.append('orb_low')
+        
+        # Check Premarket levels
+        if 'pm_high' in current_data and 'close' in current_data:
+            if abs((current_data['close'] / current_data['pm_high'] - 1) * 100) < 0.3:
+                retest_levels.append('premarket_high')
+        
+        if 'pm_low' in current_data and 'close' in current_data:
+            if abs((current_data['close'] / current_data['pm_low'] - 1) * 100) < 0.3:
+                retest_levels.append('premarket_low')
+        
+        # Check Previous Day levels
+        if 'pd_high' in current_data and 'close' in current_data:
+            if abs((current_data['close'] / current_data['pd_high'] - 1) * 100) < 0.3:
+                retest_levels.append('prev_day_high')
+        
+        if 'pd_low' in current_data and 'close' in current_data:
+            if abs((current_data['close'] / current_data['pd_low'] - 1) * 100) < 0.3:
+                retest_levels.append('prev_day_low')
+        
+        # If we're not close to any level, provide general statistics
+        if not retest_levels:
+            # Get stats for all levels
+            all_stats = self.level_analyzer.get_level_stats()
+            if all_stats:
+                summary.append("Not currently near any key level. General statistics:")
+                
+                # Format a summary of all level stats
+                for level, stats in all_stats.items():
+                    if stats['total_retests'] > 0:
+                        win_rate = stats['win_rate']
+                        summary.append(f"- {level}: {stats['total_retests']} retests, {win_rate:.1f}% win rate")
+            else:
+                summary.append("No historical level data available yet.")
+        else:
+            # Provide detailed stats for levels we're close to
+            summary.append(f"Currently near {len(retest_levels)} key level(s):")
+            
+            for level in retest_levels:
+                stats = self.level_analyzer.get_level_stats(level)
+                if stats and stats['total_retests'] > 0:
+                    summary.append(f"\n{level.upper()} STATISTICS:")
+                    summary.append(f"- Total retests: {stats['total_retests']}")
+                    summary.append(f"- Success rate: {stats['win_rate']:.1f}%")
+                    
+                    # Add pattern-specific statistics if available
+                    if stats['pattern_stats']:
+                        summary.append("  Pattern performance:")
+                        for pattern, pattern_stats in stats['pattern_stats'].items():
+                            if pattern_stats['total'] >= 3:  # Only show patterns with enough samples
+                                summary.append(f"  - {pattern}: {pattern_stats['win_rate']:.1f}% win rate ({pattern_stats['total']} occurrences)")
+                    
+                    # Find similar historical retests
+                    if 'body_size_pct' in current_data:
+                        similar_retests = self.level_analyzer.find_similar_retests(
+                            level, current_data, max_results=3
+                        )
+                        
+                        if similar_retests:
+                            summary.append("\n  Similar historical retests:")
+                            for i, retest in enumerate(similar_retests):
+                                outcome = retest['outcome']
+                                if outcome == 'pending':
+                                    outcome = 'unknown'
+                                pattern = retest['pattern'] if retest['pattern'] != 'none' else 'no specific pattern'
+                                summary.append(f"  {i+1}. {retest['date']} {retest['time']} - {pattern}, Outcome: {outcome}")
+                else:
+                    summary.append(f"\n{level.upper()}: No historical data available yet.")
+        
+        return "\n".join(summary)
+    
+    def _construct_prompt(self, market_summary, pattern_summary, memory_summary, level_stats_summary):
+        """Create a detailed prompt for the model"""
+        prompt = f"""You are an expert day trader with extensive experience in the Opening Range Breakout (ORB) strategy. Your task is to analyze the current market situation and provide a detailed trading decision.
+    
+    ### CURRENT MARKET DATA
+    {market_summary}
+    
+    ### PATTERN RECOGNITION ANALYSIS
+    {pattern_summary}
+    
+    ### MARKET LEVEL STATISTICS
+    {level_stats_summary}
+    
+    ### HISTORICAL MEMORY
+    {memory_summary}
+    
+    ### OPENING RANGE BREAKOUT (ORB) STRATEGY RULES:
+    1. The ORB strategy is based on the price range established in the first 5 minutes after market open (9:30-9:35 AM).
+    2. A valid LONG setup requires:
+       - A breakout above the OR high
+       - A pullback to retest the OR high from above
+       - Bullish candle confirmation at the retest (hammer or bullish engulfing preferred)
+       - Increased volume at the retest
+       - Technical indicators showing bullish momentum (RSI above 50)
+    
+    3. A valid SHORT setup requires:
+       - A breakout below the OR low
+       - A pullback to retest the OR low from below
+       - Bearish candle confirmation at the retest (shooting star/inverted hammer or bearish engulfing preferred)
+       - Increased volume at the retest
+       - Technical indicators showing bearish momentum (RSI below 50)
+    
+    4. Additional key levels to consider:
+       - Previous day high/low can act as support/resistance
+       - Premarket high/low can provide additional confluence
+       - Higher timeframe trend should align with the trade direction
+    
+    5. Risk management:
+       - Use a risk:reward ratio of at least 1:2
+       - Place stop loss below key support for longs or above key resistance for shorts
+       - Target at least a 50% extension of the OR range
+    
+    Based on all the information above, analyze whether there is a valid ORB setup right now. Consider market context, pattern recognition results, historical statistics at key levels, and your trading experience. Think step-by-step.
+    
+    After your analysis, provide your final recommendation in the following structured format:
+    
+    DECISION: [BUY/SELL/NO_TRADE]
+    CONFIDENCE: [0-100]
+    ENTRY_PRICE: [price]
+    STOP_LOSS: [price]
+    TARGET: [price]
+    RISK_REWARD: [ratio]
+    KEY_FACTORS: [Brief list of 3-5 key decision factors]
+    REASONING: [Your detailed step-by-step thought process]
+    """
+        return prompt
 
 class RuleBasedReasoningEngine:
     """
